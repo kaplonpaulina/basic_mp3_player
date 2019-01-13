@@ -9,7 +9,7 @@ write() ->
 
     receive
         {p} ->
-            io:format("playing ~p ~n", [get_curr_song()]),
+            io:format("playing ~p Vol: ~p Mute: ~p ~n", [get_curr_song(),get_vol(),is_mute()]),
             write();
         {pause } ->
             io:format("pause ~p ~n", [get_curr_song()]),
@@ -69,21 +69,67 @@ get_prev_song() ->
   Prev_song.
 
 play_next_song(Pid) ->
+  timer:sleep(10),
   Song = get_next_song(),
   update_curr_song(Song),
   Pid ! {p}.
 
 play_prev_song(Pid) ->
+  timer:sleep(10),
   Song = get_prev_song(),
   update_curr_song(Song),
+  Pid ! {p}.
+
+get_speaker() ->
+  Path = "/home/paulina/semestrV/basic_mp3_player/speaker.txt",
+  Speaker = readlines(Path),
+  string:lexemes(Speaker,"\n").
+
+is_mute() ->
+  [IsMute|_] = get_speaker(),
+  IsMute.
+
+get_vol() ->
+  [_,Vol_str|_] = get_speaker(),
+  {Vol,_} = string:to_integer(Vol_str),
+  Vol.
+
+get_opposite_Mute(<<"T">>) -> "F";
+get_opposite_Mute(<<"F">>) -> "T";
+get_opposite_Mute(A) -> A.
+
+
+
+update_mute() ->
+  Path = "/home/paulina/semestrV/basic_mp3_player/speaker.txt",
+  {ok, Content} = file:read_file(Path),
+  [IsMute | Tail] = binary:split(Content, <<"\n">>),
+  NewContent = [get_opposite_Mute(IsMute), <<"\n">> | Tail],
+  ok = file:write_file(Path, NewContent).
+
+get_corr_vol(51) -> 50;
+get_corr_vol(-1) -> 0;
+get_corr_vol(Vol) -> Vol.
+
+rise_vol(Pid) ->
+  Path = "/home/paulina/semestrV/basic_mp3_player/speaker.txt",
+  NewContent = is_mute()++"\n"++integer_to_list(get_corr_vol(get_vol()+1)),
+  file:write_file(Path, NewContent),
+  Pid ! {p}.
+
+lower_vol(Pid) ->
+  Path = "/home/paulina/semestrV/basic_mp3_player/speaker.txt",
+  NewContent = is_mute()++"\n"++integer_to_list(get_corr_vol(get_vol()-1)),
+  file:write_file(Path, NewContent),
   Pid ! {p}.
 
 
 run() ->
     Pid2 = spawn(?MODULE, write, []),
     Pid2 ! {p},
-    Pid2 ! {pause, get_curr_song()},
+    Pid2 ! {pause},
     play_next_song(Pid2),
+    lower_vol(Pid2),
 
     %Pid3 = spawn(?MODULE, music, []),
     %Pid3 ! 'p',
