@@ -8,13 +8,43 @@
 write() ->
 
     receive
-        {p} ->
-            io:format("playing ~p Vol: ~p Mute: ~p ~n", [get_curr_song(),get_vol(),is_mute()]),
+        {play} ->
+            io:format("\nplaying ~p \nVol: ~p Mute: ~p ~n", [get_curr_song(),get_vol(),is_mute()]),
             write();
-        {pause } ->
-            io:format("pause ~p ~n", [get_curr_song()]),
+        {pause} ->
+            io:format("\npause ~p \nVol: ~p Mute: ~p ~n", [get_curr_song(),get_vol(),is_mute()]),
+            write();
+        {volume} ->
+            io:format("\nVol: ~p Mute: ~p ~n", [get_vol(),is_mute()]),
             write()
     end.
+
+  get_key_event(WritePid) ->
+
+      receive
+          {p} ->
+              WritePid ! {play},
+              get_key_event(WritePid);
+          {s} ->
+              WritePid ! {pause},
+              get_key_event(WritePid);
+          {n} ->
+              play_next_song(WritePid),
+              get_key_event(WritePid);
+          {p} ->
+              play_prev_song(WritePid),
+              get_key_event(WritePid);
+          {'+'} ->
+              rise_vol(WritePid),
+              get_key_event(WritePid);
+          {'-'} ->
+              lower_vol(WritePid),
+              get_key_event(WritePid);
+          {m} ->
+              update_mute(WritePid),
+              get_key_event(WritePid)
+      end.
+
 
 
 %music() ->
@@ -72,13 +102,13 @@ play_next_song(Pid) ->
   timer:sleep(10),
   Song = get_next_song(),
   update_curr_song(Song),
-  Pid ! {p}.
+  Pid ! {play}.
 
 play_prev_song(Pid) ->
   timer:sleep(10),
   Song = get_prev_song(),
   update_curr_song(Song),
-  Pid ! {p}.
+  Pid ! {play}.
 
 get_speaker() ->
   Path = "/home/paulina/semestrV/basic_mp3_player/speaker.txt",
@@ -100,12 +130,13 @@ get_opposite_Mute(A) -> A.
 
 
 
-update_mute() ->
+update_mute(Pid) ->
   Path = "/home/paulina/semestrV/basic_mp3_player/speaker.txt",
   {ok, Content} = file:read_file(Path),
   [IsMute | Tail] = binary:split(Content, <<"\n">>),
   NewContent = [get_opposite_Mute(IsMute), <<"\n">> | Tail],
-  ok = file:write_file(Path, NewContent).
+  file:write_file(Path, NewContent),
+  Pid ! {volume}.
 
 get_corr_vol(51) -> 50;
 get_corr_vol(-1) -> 0;
@@ -115,18 +146,18 @@ rise_vol(Pid) ->
   Path = "/home/paulina/semestrV/basic_mp3_player/speaker.txt",
   NewContent = is_mute()++"\n"++integer_to_list(get_corr_vol(get_vol()+1)),
   file:write_file(Path, NewContent),
-  Pid ! {p}.
+  Pid ! {volume}.
 
 lower_vol(Pid) ->
   Path = "/home/paulina/semestrV/basic_mp3_player/speaker.txt",
   NewContent = is_mute()++"\n"++integer_to_list(get_corr_vol(get_vol()-1)),
   file:write_file(Path, NewContent),
-  Pid ! {p}.
+  Pid ! {volume}.
 
 
 run() ->
     Pid2 = spawn(?MODULE, write, []),
-    Pid2 ! {p},
+    Pid2 ! {play},
     Pid2 ! {pause},
     play_next_song(Pid2),
     lower_vol(Pid2),
