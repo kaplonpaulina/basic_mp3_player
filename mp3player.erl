@@ -48,7 +48,7 @@ write() ->
               update_mute(WritePid),
               get_event(WritePid);
 					{change_playlist, Index} ->
-							aylist(WritePid,Index),
+							play_next_playlist(WritePid,Index),
 							get_event(WritePid)
 
       end.
@@ -115,7 +115,7 @@ get_curr_playlist()->
   Playlist = readlines(Path),
   Playlist.
 
-aylist(Pid,Index)->
+play_next_playlist(Pid,Index)->
 	update_curr_playlist(Index),
 	Pid ! {play}.
 
