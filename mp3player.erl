@@ -12,7 +12,7 @@ write() ->
     receive
         {play} ->
 						%io:format("lol\n"),
-            io:format("\nplaying ~p \nVol: ~p Mute: ~p ~n", [get_curr_song(),get_vol(),is_mute()]),
+            io:format("\nplaying ~p \nPLaylist: ~p\nVol: ~p Mute: ~p ~n", [get_curr_song(),get_curr_playlist(),get_vol(),is_mute()]),
             write();
         {pause} ->
             io:format("\npause ~p \nVol: ~p Mute: ~p ~n", [get_curr_song(),get_vol(),is_mute()]),
@@ -23,33 +23,33 @@ write() ->
 
     end.
 
-  get_key_event(WritePid) ->
+  get_event(WritePid) ->
 
       receive
           {play} -> %112
               WritePid ! {play},
-              get_key_event(WritePid);
+              get_event(WritePid);
           {pause} -> %115
               WritePid ! {pause},
-              get_key_event(WritePid);
+              get_event(WritePid);
           {next} -> %110
               play_next_song(WritePid),
-              get_key_event(WritePid);
+              get_event(WritePid);
 					{prev} -> %110
 	            play_prev_song(WritePid),
-	            get_key_event(WritePid);
+	            get_event(WritePid);
           {up} -> %43
               rise_vol(WritePid),
-              get_key_event(WritePid);
+              get_event(WritePid);
           {down} -> %45
               lower_vol(WritePid),
-              get_key_event(WritePid);
+              get_event(WritePid);
           {mute} -> %109
               update_mute(WritePid),
-              get_key_event(WritePid);
+              get_event(WritePid);
 					{change_playlist, Index} ->
-							play_next_playlist(WritePid,Index),
-							get_key_event(WritePid)
+							aylist(WritePid,Index),
+							get_event(WritePid)
 
       end.
 
@@ -115,9 +115,9 @@ get_curr_playlist()->
   Playlist = readlines(Path),
   Playlist.
 
-play_next_playlist(Pid,Index)->
+aylist(Pid,Index)->
 	update_curr_playlist(Index),
-	Pid ! {Pid}.
+	Pid ! {play}.
 
 
 search_next(Val, [Val, Next|_],_)-> Next;
@@ -194,86 +194,85 @@ lower_vol(Pid) ->
   file:write_file(Path, NewContent),
   Pid ! {volume}.
 
-handle_event(#wx{event = #wxKey{type = key_down}}, State) ->
-    Code = wxKeyEvent:getKeyCode(),
-    Pi = State#state.value,
-    Pi ! {Code},
-    {noreply, State}.
+%handle_event(#wx{event = #wxKey{type = key_down}}, State) ->
+%    Code = wxKeyEvent:getKeyCode(),
+%    Pi = State#state.value,
+%    Pi ! {Code},
+%    {noreply, State}.
 
-run() ->
-    Pid2 = spawn(?MODULE, write, []),
-    %Pid2 ! {play},
-    %Pid2 ! {pause},
-    %play_next_song(Pid2),
-    %lower_vol(Pid2),
-    State=#state{name="Pid2", value=Pid2},
-    %Pid3 = spawn(?MODULE, music, []),
-    %Pid3 ! 'p',
 
-    Pid3 = spawn(?MODULE, get_key_event, [Pid2]),
-    %Pid3 ! {110},
+init() ->
+	WritePid = spawn(?MODULE, write, []),
+	State=#state{name="WritePid", value=WritePid},
+	GetEventPid = spawn(?MODULE, get_event, [WritePid]),
+	run(GetEventPid).
+
+
+
+run(Pid3) ->
+
 
 		Wx = wx:new(),
 		Frame = wxFrame:new(wx:null(), -1, "mp3player", [{size,{550,400}}]),
 		Panel = wxPanel:new(Frame),
-		Button = wxButton:new(Panel, 12, [{label,"play"}, {pos,{50,50}}]),
-		Button2 = wxButton:new(Panel, 13, [{label,"pause"}, {pos,{140,50}}]),
-		Button3 = wxButton:new(Panel, 14, [{label,"next"},{pos,{230,50}}]),
-		Button4 = wxButton:new(Panel, 15, [{label,"prev"}, {pos,{320,50}}]),
-		Button5 = wxButton:new(Panel, 16, [{label,"+"}, {pos,{50,150}}]),
-		Button6 = wxButton:new(Panel, 17, [{label,"-"}, {pos,{185,150}}]),
-		Button7 = wxButton:new(Panel, 18, [{label,"mute"}, {pos,{320,150}}]),
-		wxButton:connect(Button, command_button_clicked, [{callback,
+		PlayButton = wxButton:new(Panel, 12, [{label,"play"}, {pos,{50,50}}]),
+		PauseButton = wxButton:new(Panel, 13, [{label,"pause"}, {pos,{140,50}}]),
+		NextButton = wxButton:new(Panel, 14, [{label,"next"},{pos,{230,50}}]),
+		PrevButton = wxButton:new(Panel, 15, [{label,"prev"}, {pos,{320,50}}]),
+		UpButton = wxButton:new(Panel, 16, [{label,"+"}, {pos,{50,150}}]),
+		DownButton = wxButton:new(Panel, 17, [{label,"-"}, {pos,{185,150}}]),
+		MuteButton = wxButton:new(Panel, 18, [{label,"mute"}, {pos,{320,150}}]),
+
+		wxButton:connect(PlayButton, command_button_clicked, [{callback,
          fun(_,_) ->
 						 Pid3 ! {play}
              end
          }]),
-		wxButton:connect(Button2, command_button_clicked, [{callback,
+		wxButton:connect(PauseButton, command_button_clicked, [{callback,
         fun(_,_) ->
  					 Pid3 ! {pause}
             end
 		     }]),
-		 wxButton:connect(Button3, command_button_clicked, [{callback,
-		         fun(_,_) ->
-		  	Pid3 ! {next}
-		             end
+		 wxButton:connect(NextButton, command_button_clicked, [{callback,
+		 fun(_,_) ->
+				 Pid3 ! {next}
+				 end
 		 }]),
-		 wxButton:connect(Button4, command_button_clicked, [{callback,
+		 wxButton:connect(PrevButton, command_button_clicked, [{callback,
 		         fun(_,_) ->
 		  	Pid3 ! {prev}
 		             end
 		 }]),
-		 wxButton:connect(Button5, command_button_clicked, [{callback,
+		 wxButton:connect(UpButton, command_button_clicked, [{callback,
 		         fun(_,_) ->
 		  	Pid3 ! {up}
 		             end
 		 }]),
-		 wxButton:connect(Button6, command_button_clicked, [{callback,
+		 wxButton:connect(DownButton, command_button_clicked, [{callback,
 		         fun(_,_) ->
 		  	Pid3 ! {down}
 		             end
 		 }]),
-		 wxButton:connect(Button7, command_button_clicked, [{callback,
+		 wxButton:connect(MuteButton, command_button_clicked, [{callback,
 		         fun(_,_) ->
 		  	Pid3 ! {mute}
 		             end
 		 }]),
-		 Choices=get_all_playlists(),
-		 ListBox2 = wxListBox:new(Panel, 2, [{pos, {185,250}},{size, {-1,100}},
-			{choices, Choices},
+		 Playlists=get_all_playlists(),
+		 ListPlaylist = wxListBox:new(Panel, 2, [{pos, {50,250}},{size, {-1,100}},
+			{choices, Playlists},
 			{style, ?wxLB_SINGLE}]),
+		Songs = get_songs(),
+		ListSongs = wxListBox:new(Panel, 2, [{pos, {215,250}},{size, {-1,100}},
+			 {choices, Songs},
+			 {style, ?wxLB_SINGLE}]),
 
-		wxListBox:setToolTip(ListBox2, "A wxListBox with single selection"),
+		wxListBox:setToolTip(ListPlaylist, "wszystkie playlisty:"),
 
-		wxListBox:connect(ListBox2, command_listbox_doubleclicked, [{callback,
+		wxListBox:connect(ListPlaylist, command_listbox_doubleclicked, [{callback,
 						fun(_, _) ->
-			 Pid3 ! {change_playlist}
-								end
-		}]),
-		wxListBox:connect(ListBox2, command_listbox_selected, [{callback,
-						fun(_, _) ->
-			 {_,[X]} = wxListBox:getSelections(ListBox2),
-			 update_curr_playlist(X)
+			{_,[X]} = wxListBox:getSelections(ListPlaylist),
+			 Pid3 ! {change_playlist, X}
 								end
 		}]),
 
