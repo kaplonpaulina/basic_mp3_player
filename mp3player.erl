@@ -226,7 +226,20 @@ init() ->
 	ets:insert(pids, {timerPid, TimerPid}),
 	run(GetEventPid).
 
-
+button(Panel,GetEventPid) ->
+	Songs = get_songs(),
+	ListSongs = wxListBox:new(Panel, 2, [{pos, {215,250}},{size, {-1,100}},
+		 {choices, Songs},
+		 {style, ?wxLB_SINGLE}]),
+ wxListBox:connect(ListSongs, command_listbox_doubleclicked, [{callback,
+					fun(_, _) ->
+						io:format("lol"),
+		{_,[X]} = wxListBox:getSelections(ListSongs),
+		update_curr_song(X),
+		 GetEventPid ! {play},
+		 timer:sleep(10)
+							end
+	}]).
 
 run(GetEventPid) ->
 
@@ -289,17 +302,15 @@ run(GetEventPid) ->
 		 ListPlaylist = wxListBox:new(Panel, 2, [{pos, {50,250}},{size, {-1,100}},
 			{choices, Playlists},
 			{style, ?wxLB_SINGLE}]),
-		Songs = get_songs(),
-		ListSongs = wxListBox:new(Panel, 2, [{pos, {215,250}},{size, {-1,100}},
-			 {choices, Songs},
-			 {style, ?wxLB_SINGLE}]),
 
 		wxListBox:setToolTip(ListPlaylist, "wszystkie playlisty:"),
 
 		wxListBox:connect(ListPlaylist, command_listbox_doubleclicked, [{callback,
 						fun(_, _) ->
 			{_,[X]} = wxListBox:getSelections(ListPlaylist),
-			 GetEventPid ! {change_playlist, X}
+			 GetEventPid ! {change_playlist, X},
+			 timer:sleep(10),
+			 button(Panel,GetEventPid)
 								end
 		}]),
 
