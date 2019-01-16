@@ -2,11 +2,6 @@
 -compile([export_all]).
 -include_lib("wx/include/wx.hrl").
 
--record(state,
-	{
-	  name,
-    value
-	 }).
 write() ->
 
     receive
@@ -23,32 +18,59 @@ write() ->
 
     end.
 
-  get_event(WritePid) ->
+end_of_song(Pid)->
+	receive
+		{next,false} -> Pid ! {next},
+		end_of_song(Pid)
+	end.
 
+seconds(Pid,Paused)->
+	receive
+		{new}->
+			Pid ! {new},
+			seconds(Pid, false);
+		{pause}->
+			Pid ! {pause},
+			seconds(Pid,true)
+	after
+		10000 ->
+			Pid ! {next,Paused},
+			seconds(Pid,Paused)
+	end.
+
+
+
+  get_event(WritePid) ->
+		[{_, TimerPid}] = ets:lookup(pids, timerPid),
       receive
           {play} -> %112
               WritePid ! {play},
-              get_event(WritePid);
+							TimerPid ! {new},
+						  get_event(WritePid);
           {pause} -> %115
               WritePid ! {pause},
+							TimerPid ! {pause},
               get_event(WritePid);
           {next} -> %110
               play_next_song(WritePid),
+							TimerPid ! {new},
               get_event(WritePid);
-					{prev} -> %110
+					{prev} ->
 	            play_prev_song(WritePid),
+							TimerPid ! {new},
 	            get_event(WritePid);
-          {up} -> %43
+          {up} ->
               rise_vol(WritePid),
               get_event(WritePid);
-          {down} -> %45
+          {down} ->
               lower_vol(WritePid),
               get_event(WritePid);
-          {mute} -> %109
+          {mute} ->
               update_mute(WritePid),
               get_event(WritePid);
 					{change_playlist, Index} ->
 							play_next_playlist(WritePid,Index),
+							TimerPid ! {new},
 							get_event(WritePid)
 
       end.
@@ -194,22 +216,19 @@ lower_vol(Pid) ->
   file:write_file(Path, NewContent),
   Pid ! {volume}.
 
-%handle_event(#wx{event = #wxKey{type = key_down}}, State) ->
-%    Code = wxKeyEvent:getKeyCode(),
-%    Pi = State#state.value,
-%    Pi ! {Code},
-%    {noreply, State}.
-
 
 init() ->
+	ets:new(pids, [named_table, protected, set, {keypos, 1}]),
 	WritePid = spawn(?MODULE, write, []),
-	State=#state{name="WritePid", value=WritePid},
 	GetEventPid = spawn(?MODULE, get_event, [WritePid]),
+	EndOdSongPid = spawn(?MODULE,end_of_song,[GetEventPid]),
+	TimerPid = spawn(?MODULE,seconds,[EndOdSongPid,true]),
+	ets:insert(pids, {timerPid, TimerPid}),
 	run(GetEventPid).
 
 
 
-run(Pid3) ->
+run(GetEventPid) ->
 
 
 		Wx = wx:new(),
@@ -222,40 +241,48 @@ run(Pid3) ->
 		UpButton = wxButton:new(Panel, 16, [{label,"+"}, {pos,{50,150}}]),
 		DownButton = wxButton:new(Panel, 17, [{label,"-"}, {pos,{185,150}}]),
 		MuteButton = wxButton:new(Panel, 18, [{label,"mute"}, {pos,{320,150}}]),
+		ExitButton = wxButton:new(Panel, 19, [{label,"X"}, {pos,{320,50}}]),
 
 		wxButton:connect(PlayButton, command_button_clicked, [{callback,
          fun(_,_) ->
-						 Pid3 ! {play}
+						 GetEventPid ! {play}
              end
          }]),
 		wxButton:connect(PauseButton, command_button_clicked, [{callback,
         fun(_,_) ->
- 					 Pid3 ! {pause}
+ 					 GetEventPid ! {pause}
             end
 		     }]),
 		 wxButton:connect(NextButton, command_button_clicked, [{callback,
 		 fun(_,_) ->
-				 Pid3 ! {next}
+				 GetEventPid ! {next}
 				 end
 		 }]),
 		 wxButton:connect(PrevButton, command_button_clicked, [{callback,
 		         fun(_,_) ->
-		  	Pid3 ! {prev}
+		  	GetEventPid ! {prev}
 		             end
 		 }]),
 		 wxButton:connect(UpButton, command_button_clicked, [{callback,
 		         fun(_,_) ->
-		  	Pid3 ! {up}
+		  	GetEventPid ! {up}
 		             end
 		 }]),
 		 wxButton:connect(DownButton, command_button_clicked, [{callback,
 		         fun(_,_) ->
-		  	Pid3 ! {down}
+		  	GetEventPid ! {down}
 		             end
 		 }]),
 		 wxButton:connect(MuteButton, command_button_clicked, [{callback,
 		         fun(_,_) ->
-		  	Pid3 ! {mute}
+		  	GetEventPid ! {mute}
+		             end
+		 }]),
+		 wxButton:connect(ExitButton, command_button_clicked, [{callback,
+		         fun(_,_) ->
+							 [{_, TimerPid}] = ets:lookup(pids, timerPid),
+				exit(TimerPid,reason),
+		  	wxFrame:destroy(Frame)
 		             end
 		 }]),
 		 Playlists=get_all_playlists(),
@@ -272,13 +299,8 @@ run(Pid3) ->
 		wxListBox:connect(ListPlaylist, command_listbox_doubleclicked, [{callback,
 						fun(_, _) ->
 			{_,[X]} = wxListBox:getSelections(ListPlaylist),
-			 Pid3 ! {change_playlist, X}
+			 GetEventPid ! {change_playlist, X}
 								end
 		}]),
 
-		wxFrame:show(Frame),
-
-
-
-
-    ok.
+		wxFrame:show(Frame).
